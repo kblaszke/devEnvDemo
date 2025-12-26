@@ -1,0 +1,41 @@
+name: Hard cut release (tag + back-merge)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 2025.01.0)'
+        required: true
+        type: string
+
+jobs:
+  hard-cut:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1 Checkout full version
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2 checkout main
+      - name: Checkout main
+        run: |
+          git checkout main
+          git pull origin main
+
+      # 3 Create tag (HARD CUT)
+      - name: Create release tag
+        run: |
+          TAG="v${{ github.event.inputs.version }}"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+      # 4 Back-merge main → develop
+      - name: Back-merge main into develop
+        run: |
+          git checkout develop
+          git pull origin develop
+          git merge origin/main --no-ff -m "Back-merge main after release v${{ github.event.inputs.version }}"
+          git push origin develop
