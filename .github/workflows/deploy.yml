@@ -13,26 +13,29 @@ on:
           - prod
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-
     steps:
-      - name: Download JAR artifact
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - run: ./gradlew clean build
+
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-app-jar
+          path: build/libs/*.jar
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download JAR
         uses: actions/download-artifact@v4
         with:
           name: demo-app-jar
-
-      - name: Deploy to server
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            set -e
-            mkdir -p ${{ secrets.APP_DIR }}/releases
-            TIMESTAMP=$(date +%Y%m%d%H%M%S)
-            cp *.jar ${{ secrets.APP_DIR }}/releases/app-$TIMESTAMP.jar
-            ln -sfn ${{ secrets.APP_DIR }}/releases/app-$TIMESTAMP.jar ${{ secrets.APP_DIR }}/current
-            sudo systemctl restart demo-app
