@@ -10,7 +10,7 @@ class HelloWorldController {
 
     @GetMapping("/hello")
     fun hello(): String {
-        return "Hello World!"
+        return "Hello Blaszak's World!"
     }
 
     @PostMapping("/hello")
