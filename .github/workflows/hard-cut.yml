@@ -38,7 +38,7 @@ jobs:
       # 4 Checkout main
       - name: Checkout main
         run: |
-          git checkout main
+          git checkout release/${{ github.event.inputs.version }}
           git pull origin main
 
       # 5 Build JAR (z wersją release)
