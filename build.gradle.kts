@@ -37,3 +37,12 @@ kotlin {
 tasks.withType<Test> {
 	useJUnitPlatform()
 }
+
+tasks {
+	bootJar {
+		archiveFileName.set("demo.jar")
+	}
+	jar {
+		enabled = false
+	}
+}

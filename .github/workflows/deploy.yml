@@ -1,4 +1,4 @@
-name: Deploy JAR
+name: Build & Deploy JAR
 
 on:
   workflow_dispatch:
@@ -7,10 +7,7 @@ on:
         description: "Target environment"
         required: true
         type: choice
-        options:
-          - test
-          - cert
-          - prod
+        options: [test, cert, prod]
 
 jobs:
   build:
@@ -23,19 +20,27 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - run: ./gradlew clean build
+      - name: Build bootJar
+        run: ./gradlew clean bootJar --no-daemon
 
-      - name: Upload JAR
+      - name: Verify JAR
+        run: |
+          ls -lh build/libs
+          test -f build/libs/demo.jar
+
+      - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
           name: demo-app-jar
-          path: build/libs/*.jar
+          path: build/libs/demo.jar
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Download JAR
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: demo-app-jar
+          path: artifact
+
+      - run: ls -l artifact
