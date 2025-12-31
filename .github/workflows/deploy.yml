@@ -43,6 +43,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
 
     steps:
       - name: Download JAR artifact
@@ -55,6 +56,16 @@ jobs:
         run: |
           echo "▶ Artifact content:"
           ls -lh artifact
+
+      - name: Verify VM_HOST secret is set
+        run: |
+          echo "▶ Checking VM_HOST"
+          if [ -z "${{ secrets.VM_HOST }}" ]; then
+            echo "::error::Environment secret VM_HOST is not set or not exposed to this job."
+            echo "Make sure the job declares environment: \${{ github.event.inputs.environment }} and that the environment contains VM_HOST."
+            exit 1
+          fi
+          echo "Using VM_HOST=${{ secrets.VM_HOST }}"
 
       - name: Setup SSH key
         run: |
