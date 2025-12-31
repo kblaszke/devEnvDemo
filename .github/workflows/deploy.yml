@@ -57,33 +57,47 @@ jobs:
           echo "▶ Artifact content:"
           ls -lh artifact
 
+      - name: show environment & input
+        run: |
+          echo "▶ workflow_dispatch input: ${{ github.event.inputs.environment }}"
+          echo "▶ Job declared environment (expression): ${{ github.event.inputs.environment }}"
+          # Do not print secrets. This only confirms which environment name we are using.
+
       - name: Verify VM_HOST secret is set
         run: |
-          echo "▶ Checking VM_HOST"
-          if [ -z "${{ secrets.VM_HOST }}" ]; then
+          echo "▶ Checking VM_HOST secret availability (masked if present)"
+          VM_HOST="${{ secrets.VM_HOST }}"
+          if [ -z "$VM_HOST" ]; then
             echo "::error::Environment secret VM_HOST is not set or not exposed to this job."
-            echo "Make sure the job declares environment: \${{ github.event.inputs.environment }} and that the environment contains VM_HOST."
+            echo "Make sure the job declares environment: \${{ github.event.inputs.environment }} and that the environment contains VM_HOST. Also ensure any required environment approvals were granted for this run."
             exit 1
           fi
-          echo "Using VM_HOST=${{ secrets.VM_HOST }}"
+          echo "VM_HOST appears set (masked in logs)."
 
       - name: Setup SSH key
         run: |
           echo "▶ Installing SSH key"
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
+          # sanitize CRLF that may be present in copied secrets and write private key:
+          printf '%s\n' "${{ secrets.SSH_KEY }}" | sed 's/\r$//' > ~/.ssh/id_deploy_key
+          chmod 600 ~/.ssh/id_deploy_key
+          # run ssh-agent and add the key to ensure it is used:
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_deploy_key
+          # Record known host; do not disable in production, but helpful to avoid prompt:
+          ssh-keyscan -H "${{ secrets.VM_HOST }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
       - name: Copy JAR to VM
         run: |
           echo "▶ Copying JAR to VM"
-          scp artifact/demo.jar demo@${{ secrets.VM_HOST }}:/opt/demo-app/releases/demo.jar
+          # Use SSH_USER secret instead of hard-coded user, explicitly pass key and avoid other keys
+          scp -i ~/.ssh/id_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no artifact/demo.jar ${{ secrets.SSH_USER }}@${{ secrets.VM_HOST }}:/opt/demo-app/releases/demo.jar
 
       - name: Activate release & restart service
         run: |
           echo "▶ Activating release on VM"
-          ssh demo@${{ secrets.VM_HOST }} << 'EOF'
+          ssh -i ~/.ssh/id_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.VM_HOST }} << 'EOF'
             set -e
             echo "▶ Current releases:"
             ls -lh /opt/demo-app/releases
@@ -96,3 +110,8 @@ jobs:
             sudo systemctl restart demo-app
             sudo systemctl status demo-app --no-pager
           EOF
+
+      # Optional: enable temporarily if you need detailed SSH debug output (remove when done)
+      #- name: SSH debugging (verbose)
+      #  run: |
+      #    ssh -vvv -i ~/.ssh/id_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.VM_HOST }} "echo connected" || true
